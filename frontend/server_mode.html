@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Server Mode - Dashboard</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body class="dark">
+  <main class="container">
+    <section class="card">
+      <div class="row space-between">
+        <h2>Server Mode</h2>
+        <div class="muted">Control center monitoring dashboard</div>
+      </div>
+
+      <div class="search-row">
+        <input id="watch_input" placeholder="Enter Watch ID e.g. WATCH-ABC123">
+        <button id="btnSearch" class="btn">Search</button>
+      </div>
+
+      <div class="metrics-grid" id="metrics">
+        <div class="metric card small"><div class="label">Status</div><div class="val" id="mStatus">—</div></div>
+        <div class="metric card small"><div class="label">Total Readings</div><div class="val" id="mTotal">—</div></div>
+        <div class="metric card small"><div class="label">Alerts Triggered</div><div class="val" id="mAlerts">—</div></div>
+        <div class="metric card small"><div class="label">Last Updated</div><div class="val" id="mLast">—</div></div>
+      </div>
+
+      <h3>Latest Vital Signs</h3>
+      <div class="grid-vitals" id="vitals">
+        <div class="vcard"><div class="vlabel">Heart Rate</div><div class="vval" id="v_hr">—</div></div>
+        <div class="vcard"><div class="vlabel">Blood Pressure</div><div class="vval" id="v_bp">—</div></div>
+        <div class="vcard"><div class="vlabel">SpO₂</div><div class="vval" id="v_spo2">—</div></div>
+        <div class="vcard"><div class="vlabel">Resp Rate</div><div class="vval" id="v_rr">—</div></div>
+        <div class="vcard"><div class="vlabel">Temperature</div><div class="vval" id="v_temp">—</div></div>
+        <div class="vcard"><div class="vlabel">CO Level</div><div class="vval" id="v_co">—</div></div>
+        <div class="vcard wide"><div class="vlabel">Oxygen Level</div><div class="vval" id="v_o2">—</div></div>
+      </div>
+
+      <h3>Session Averages</h3>
+      <div class="grid-averages" id="averages">
+        <div class="avg card small"><div class="label">Avg HR</div><div class="val" id="a_hr">—</div></div>
+        <div class="avg card small"><div class="label">Avg SpO₂</div><div class="val" id="a_spo2">—</div></div>
+        <div class="avg card small"><div class="label">Avg CO</div><div class="val" id="a_co">—</div></div>
+        <div class="avg card small"><div class="label">Avg O₂</div><div class="val" id="a_o2">—</div></div>
+      </div>
+
+      <h3>Reading History</h3>
+      <div class="history card">
+        <table id="historyTable">
+          <thead><tr><th>Time</th><th>HR</th><th>BP</th><th>SpO₂</th><th>CO</th><th>O₂</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+<script>
+const socket = io();
+let subscribed = null;
+const watchInput = document.getElementById('watch_input');
+const btnSearch = document.getElementById('btnSearch');
+
+btnSearch.addEventListener('click', ()=> loadAll(watchInput.value.trim()));
+
+socket.on('new_data', (data)=>{
+  if (!data) return;
+  if (subscribed && data.watch_id === subscribed) {
+    // refresh latest panel immediately
+    renderLatest(data);
+    loadStats(subscribed);
+    prependHistoryRow(data);
+  }
+});
+
+function renderLatest(d){
+  document.getElementById('v_hr').innerText = d.heart_rate + ' BPM';
+  document.getElementById('v_bp').innerText = d.blood_pressure;
+  document.getElementById('v_spo2').innerText = d.spo2 + ' %';
+  document.getElementById('v_rr').innerText = d.respiratory_rate + ' BPM';
+  document.getElementById('v_temp').innerText = (d.temperature || '-') + ' °C';
+  document.getElementById('v_co').innerText = (d.co_level || '-') + ' ppm';
+  document.getElementById('v_o2').innerText = (d.oxygen_level || '-') + ' %';
+}
+
+function loadAll(wid){
+  if (!wid) return;
+  subscribed = wid;
+  socket.emit('join', {watch_id: wid});
+  fetch(`/get_data?watch_id=${encodeURIComponent(wid)}`).then(r=>r.json()).then(j=>{
+    if (!j.error) renderLatest(j);
+  });
+  loadStats(wid);
+  loadHistory(wid);
+}
+
+function loadStats(wid){
+  fetch(`/stats?watch_id=${encodeURIComponent(wid)}`).then(r=>r.json()).then(j=>{
+    document.getElementById('mTotal').innerText = j.count;
+    document.getElementById('mLast').innerText = j.last_updated || '-';
+    document.getElementById('mAlerts').innerText = j.alerts;
+    document.getElementById('mStatus').innerText = j.count>0?'Active':'Idle';
+    document.getElementById('a_hr').innerText = j.avg_heart_rate + ' BPM';
+    document.getElementById('a_spo2').innerText = j.avg_spo2 + ' %';
+    document.getElementById('a_co').innerText = j.avg_co + ' ppm';
+    document.getElementById('a_o2').innerText = j.avg_oxygen + ' %';
+  });
+}
+
+function loadHistory(wid){
+  fetch(`/get_history?watch_id=${encodeURIComponent(wid)}&limit=20`).then(r=>r.json()).then(j=>{
+    const tbody = document.querySelector('#historyTable tbody');
+    tbody.innerHTML='';
+    j.history.forEach(row=>{
+      const status = (row.heart_rate<55||row.heart_rate>110||row.spo2<90||row.co_level>9)?'Alert':'Normal';
+      const tr = `<tr><td>${row.timestamp}</td><td>${row.heart_rate}</td><td>${row.blood_pressure}</td><td>${row.spo2}%</td><td>${row.co_level}</td><td>${row.oxygen_level}%</td><td>${status}</td></tr>`;
+      tbody.innerHTML += tr;
+    });
+  });
+}
+
+function prependHistoryRow(d){
+  const tbody = document.querySelector('#historyTable tbody');
+  const status = (d.heart_rate<55||d.heart_rate>110||d.spo2<90||d.co_level>9)?'Alert':'Normal';
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${d.timestamp}</td><td>${d.heart_rate}</td><td>${d.blood_pressure}</td><td>${d.spo2}%</td><td>${d.co_level}</td><td>${d.oxygen_level}%</td><td>${status}</td>`;
+  tbody.insertBefore(tr, tbody.firstChild);
+  // trim to 20 rows
+  while(tbody.children.length>20) tbody.removeChild(tbody.lastChild);
+}
+</script>
+</body>
+</html>
