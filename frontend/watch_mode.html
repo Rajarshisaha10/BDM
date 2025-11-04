@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Watch Mode</title>
-  <link rel="stylesheet" href="./static/css/dashboard.css">
+  <link rel="stylesheet" href="./static/css/style.css">
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body class="dark">
@@ -47,19 +47,13 @@
   </main>
 
 <script>
-const socket = io();
+const BASE_URL = "https://overdiligent-alfonzo-openhandedly.ngrok-free.dev";
+const socket = io(BASE_URL);
 let tx = 0;
-const watchIdEl = document.getElementById('watch_id');
-const deviceIdEl = document.getElementById('deviceId');
-const txStatus = document.getElementById('txStatus');
-const txCount = document.getElementById('txCount');
-const preview = document.getElementById('preview');
-const alertBox = document.getElementById('alertBox');
-const alertMsg = document.getElementById('alertMsg');
 
 function getPayload(){
   return {
-    watch_id: watchIdEl.value || 'WATCH-000',
+    watch_id: document.getElementById('watch_id').value || 'WATCH-000',
     heart_rate: Number(document.getElementById('heart_rate').value),
     blood_pressure: document.getElementById('blood_pressure').value,
     respiratory_rate: Number(document.getElementById('respiratory_rate').value),
@@ -73,18 +67,25 @@ function getPayload(){
 async function sendNow(){
   const payload = getPayload();
   try{
-    const res = await fetch('/upload_data', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    const res = await fetch(`${BASE_URL}/upload_data`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
     const j = await res.json();
     tx++;
-    txCount.innerText = 'Transmissions: ' + tx;
-    txStatus.innerText = 'Last sent: ' + j.timestamp;
-    preview.innerText = JSON.stringify(payload, null, 2);
-    deviceIdEl.innerText = payload.watch_id;
-    // show alerts visually
+    document.getElementById('txCount').innerText = 'Transmissions: ' + tx;
+    document.getElementById('txStatus').innerText = 'Last sent: ' + j.timestamp;
+    document.getElementById('preview').innerText = JSON.stringify(payload, null, 2);
+    document.getElementById('deviceId').innerText = payload.watch_id;
+
     const alerts = [];
     if (payload.heart_rate < 55 || payload.heart_rate > 110) alerts.push('Abnormal heart rate');
     if (payload.spo2 < 90) alerts.push('Low SpO2');
     if (payload.co_level > 9) alerts.push('High CO Exposure');
+
+    const alertBox = document.getElementById('alertBox');
+    const alertMsg = document.getElementById('alertMsg');
     if (alerts.length){
       alertBox.classList.remove('hidden');
       alertMsg.innerHTML = alerts.join('<br>');
@@ -92,7 +93,7 @@ async function sendNow(){
       alertBox.classList.add('hidden');
     }
   } catch(e){
-    txStatus.innerText = 'Send failed';
+    document.getElementById('txStatus').innerText = 'Send failed';
   }
 }
 
@@ -107,12 +108,11 @@ document.getElementById('btnRandom').addEventListener('click', ()=>{
   document.getElementById('oxygen_level').value = (19 + Math.random()*2).toFixed(1);
 });
 
-// auto-send current inputs every 5s (manual values)
+// auto-send every 5s
 setInterval(sendNow, 5000);
 
-// subscribe to socket for live preview updates
 socket.on('new_data', (data) => {
-  preview.innerText = JSON.stringify(data, null, 2);
+  document.getElementById('preview').innerText = JSON.stringify(data, null, 2);
 });
 </script>
 </body>
