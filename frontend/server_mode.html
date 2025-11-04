@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Server Mode - Dashboard</title>
-  <link rel="stylesheet" href="./static/css/dashboard.css">
+  <link rel="stylesheet" href="./static/css/stlye.css">
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body class="dark">
@@ -57,7 +57,8 @@
   </main>
 
 <script>
-const socket = io();
+const BASE_URL = "https://overdiligent-alfonzo-openhandedly.ngrok-free.dev";
+const socket = io(BASE_URL);
 let subscribed = null;
 const watchInput = document.getElementById('watch_input');
 const btnSearch = document.getElementById('btnSearch');
@@ -67,7 +68,6 @@ btnSearch.addEventListener('click', ()=> loadAll(watchInput.value.trim()));
 socket.on('new_data', (data)=>{
   if (!data) return;
   if (subscribed && data.watch_id === subscribed) {
-    // refresh latest panel immediately
     renderLatest(data);
     loadStats(subscribed);
     prependHistoryRow(data);
@@ -88,7 +88,7 @@ function loadAll(wid){
   if (!wid) return;
   subscribed = wid;
   socket.emit('join', {watch_id: wid});
-  fetch(`/get_data?watch_id=${encodeURIComponent(wid)}`).then(r=>r.json()).then(j=>{
+  fetch(`${BASE_URL}/get_data?watch_id=${encodeURIComponent(wid)}`).then(r=>r.json()).then(j=>{
     if (!j.error) renderLatest(j);
   });
   loadStats(wid);
@@ -96,7 +96,7 @@ function loadAll(wid){
 }
 
 function loadStats(wid){
-  fetch(`/stats?watch_id=${encodeURIComponent(wid)}`).then(r=>r.json()).then(j=>{
+  fetch(`${BASE_URL}/stats?watch_id=${encodeURIComponent(wid)}`).then(r=>r.json()).then(j=>{
     document.getElementById('mTotal').innerText = j.count;
     document.getElementById('mLast').innerText = j.last_updated || '-';
     document.getElementById('mAlerts').innerText = j.alerts;
@@ -109,7 +109,7 @@ function loadStats(wid){
 }
 
 function loadHistory(wid){
-  fetch(`/get_history?watch_id=${encodeURIComponent(wid)}&limit=20`).then(r=>r.json()).then(j=>{
+  fetch(`${BASE_URL}/get_history?watch_id=${encodeURIComponent(wid)}&limit=20`).then(r=>r.json()).then(j=>{
     const tbody = document.querySelector('#historyTable tbody');
     tbody.innerHTML='';
     j.history.forEach(row=>{
@@ -126,7 +126,6 @@ function prependHistoryRow(d){
   const tr = document.createElement('tr');
   tr.innerHTML = `<td>${d.timestamp}</td><td>${d.heart_rate}</td><td>${d.blood_pressure}</td><td>${d.spo2}%</td><td>${d.co_level}</td><td>${d.oxygen_level}%</td><td>${status}</td>`;
   tbody.insertBefore(tr, tbody.firstChild);
-  // trim to 20 rows
   while(tbody.children.length>20) tbody.removeChild(tbody.lastChild);
 }
 </script>
